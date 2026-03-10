@@ -1,0 +1,58 @@
+name: Docker Build and Cleanup
+
+on:
+  push:
+    branches: "main"
+    paths: "section-2/task-c/**"
+
+jobs:
+  build:
+    # Use 'ubuntu-latest' for GitHub-hosted or your label for self-hosted
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. DIAGNOSIS: Check disk space before starting
+      - name: Check disk space (Start)
+        run: |
+          echo "Current disk usage at start:"
+          df -h
+
+      # 2. PREVENTIVE FIX: Remove heavy pre-installed tools (Only for GitHub-hosted runners)
+      # This frees up ~20GB of space if needed
+      - name: Free disk space (Pre-build)
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+
+      # 3. BUILD: Build the optimized Docker image
+      - name: Build Docker image
+        run: |
+          docker build -t my-app:${{ github.sha }} \
+            -f section-2/task-c/Dockerfile \
+            section-2/task-c/
+
+      # 4. DIAGNOSIS: Check disk space after build to monitor growth
+      - name: Check disk space (After Build)
+        run: |
+          echo "Disk usage after Docker build:"
+          df -h
+          echo "Docker images size:"
+          docker images
+
+      # 5. PERMANENT FIX: Clean up old data to keep the runner healthy
+      # 'if: always()' ensures cleanup runs even if the build fails
+      - name: Post-build Cleanup
+        if: always()
+        run: |
+          echo "Cleaning up dangling images and old build cache..."
+          docker image prune -f
+          docker builder prune -f --filter "until=24h"
+
+      # 6. FINAL STATUS: Verify final disk state
+      - name: Final disk status
+        if: always()
+        run: df -h
